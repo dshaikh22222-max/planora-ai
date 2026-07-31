@@ -1,0 +1,13 @@
+We measured section-level retrieval accuracy for Town Planning AI's knowledge base against a held-out set of questions drawn from MRTP, UDCPR, and RERA.
+
+## Method
+
+Questions were written independently of the indexing pipeline, then scored on whether retrieval surfaced the correct section within the top three results.
+
+## Findings
+
+Retrieval accuracy was highest for UDCPR, reflecting its more consistent section structure. RERA questions involving cross-references to state-specific rules showed the largest gap, which is the primary driver behind Rule Search AI's cross-state comparison work.
+
+## What this means for the roadmap
+
+Improving cross-reference resolution — following a citation from one act into a related state rule — is the single highest-leverage retrieval improvement available right now.

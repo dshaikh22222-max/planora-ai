@@ -1,0 +1,13 @@
+A citation-first assistant has one non-negotiable requirement: never state a section number it can't back up. Here's the shape of the pipeline that enforces that.
+
+## Retrieval before generation
+
+Every query first runs against an indexed corpus of planning documents. The model only answers using passages the retrieval step actually returned — it isn't free to recall a section number from memory.
+
+## The fallback boundary
+
+When retrieval confidence is low — a query outside the indexed corpus, or an ambiguous cross-state comparison — the system falls back to a general LLM response, but it's labeled differently, so a user can tell the difference between "cited" and "best effort."
+
+## Why this matters more than raw accuracy
+
+A wrong answer with no citation is bad. A wrong answer *with* a confident, fabricated citation is worse — it's actively misleading in a domain where the citation is often the thing being relied on. The engineering priority isn't just "be right," it's "never look more certain than the retrieval actually supports."
