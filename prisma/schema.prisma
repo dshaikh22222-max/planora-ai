@@ -3,7 +3,7 @@
 // Neon, etc.) — change `provider` to "postgresql" and point DATABASE_URL
 // at your connection string. Nothing else in the schema needs to change.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
