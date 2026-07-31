@@ -1,10 +1,10 @@
-// Local/dev uses SQLite so the whole stack runs with zero external
-// services. For production, switch the datasource to Postgres (Supabase,
-// Neon, etc.) — change `provider` to "postgresql" and point DATABASE_URL
-// at your connection string. Nothing else in the schema needs to change.
+// Production: Vercel Neon integration automatically sets DATABASE_URL (pooled)
+// and DATABASE_URL_UNPOOLED (direct connection for migrations).
+// Local dev: Set DATABASE_URL to a postgresql:// connection string in .env
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 generator client {

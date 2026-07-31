@@ -7,7 +7,7 @@ out/
 
 # env
 .env
-.env*.local
+.env*
 
 # database
 prisma/dev.db
@@ -17,3 +17,6 @@ prisma/dev.db-journal
 .DS_Store
 *.pem
 npm-debug.log*
+
+.vercel
+.env*
