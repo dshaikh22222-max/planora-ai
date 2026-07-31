@@ -1,10 +1,8 @@
-// Production: Vercel Neon integration automatically sets DATABASE_URL (pooled)
-// and DATABASE_URL_UNPOOLED (direct connection for migrations).
+// Production: Vercel Neon integration automatically sets DATABASE_URL.
 // Local dev: Set DATABASE_URL to a postgresql:// connection string in .env
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
