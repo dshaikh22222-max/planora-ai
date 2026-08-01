@@ -34,6 +34,12 @@ export function Navbar() {
         <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
           <AccountLink />
+          <Link
+            href="/admin"
+            className="flex items-center gap-1 rounded-lg border border-blueprint-500/20 bg-blueprint-500/10 px-3 py-1.5 text-xs font-medium text-blueprint-600 transition hover:bg-blueprint-500/20 dark:text-blueprint-300"
+          >
+            Admin
+          </Link>
           <Button href="/contact" variant="secondary" size="sm">
             Contact
           </Button>

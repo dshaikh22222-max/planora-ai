@@ -37,7 +37,13 @@ export function Footer() {
       <div className="border-t border-ink-100 py-6 dark:border-ink-800">
         <Container className="flex flex-col items-center justify-between gap-3 text-xs text-ink-400 md:flex-row dark:text-ink-500">
           <p>© {new Date().getFullYear()} {site.name}. All rights reserved.</p>
-          <p className="font-mono">Built in India, for India.</p>
+          <div className="flex items-center gap-4 font-mono">
+            <span>Built in India, for India.</span>
+            <span>·</span>
+            <Link href="/admin" className="text-blueprint-500 hover:underline dark:text-blueprint-400">
+              Admin Console →
+            </Link>
+          </div>
         </Container>
       </div>
     </footer>

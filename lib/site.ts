@@ -11,6 +11,7 @@ export const site = {
 export const primaryNav = [
   { label: "Products", href: "/products" },
   { label: "Town Planning AI", href: "/products/town-planning-ai" },
+  { label: "GIS Portal", href: "/gis" },
   { label: "Apps", href: "/apps" },
   { label: "Projects", href: "/projects" },
   { label: "Blog", href: "/blog" },

@@ -86,3 +86,421 @@ model Invoice {
   createdAt     DateTime @default(now())
   purchase      Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 }
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN MODULE — Additive models (existing models above are
+// never modified). All new models live below this line.
+// ─────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  SUPPORT
+  ANALYST
+}
+
+/// Admin console users — completely separate from end-user NextAuth.
+model AdminUser {
+  id                   String         @id @default(cuid())
+  email                String         @unique
+  name                 String
+  passwordHash         String
+  role                 AdminRole      @default(EDITOR)
+  isActive             Boolean        @default(true)
+  totpSecret           String?        // Encrypted TOTP secret (optional 2FA)
+  totpEnabled          Boolean        @default(false)
+  failedLoginAttempts  Int            @default(0)
+  lockedUntil          DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  sessions             AdminSession[]
+  auditLogs            AdminAuditLog[]
+}
+
+/// HttpOnly session tokens for admin users.
+model AdminSession {
+  id          String    @id @default(cuid())
+  adminUserId String
+  token       String    @unique
+  expiresAt   DateTime
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}
+
+/// Immutable write-once audit trail for all admin actions.
+model AdminAuditLog {
+  id          String    @id @default(cuid())
+  adminUserId String
+  /// Dot-notation action string, e.g. "product.create", "user.ban"
+  action      String
+  entityType  String?
+  entityId    String?
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId])
+  @@index([action, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PHASE 1 — Product & Content Management Models
+// ─────────────────────────────────────────────────────────────
+
+enum ProductType {
+  DIGITAL
+  PHYSICAL
+  SUBSCRIPTION
+  SERVICE
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  OUT_OF_STOCK
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+model Product {
+  id              String           @id @default(cuid())
+  slug            String           @unique
+  name            String
+  shortDesc       String
+  longDesc        String           @db.Text
+  type            ProductType
+  status          ProductStatus    @default(DRAFT)
+  /// Price in paise (smallest INR unit)
+  price           Int              @default(0)
+  comparePrice    Int?
+  currency        String           @default("INR")
+  thumbnailUrl    String?
+  tags            String[]
+  seoTitle        String?
+  seoDesc         String?
+  seoKeywords     String[]
+  sortOrder       Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  digitalAsset    DigitalAsset?
+  physicalDetails PhysicalProduct?
+  categories      ProductCategory[]
+
+  @@index([status, type])
+  @@index([slug])
+}
+
+model DigitalAsset {
+  id             String   @id @default(cuid())
+  productId      String   @unique
+  fileUrl        String?  // Vercel Blob URL (null for prompts)
+  fileName       String?
+  fileSize       Int?     // bytes
+  fileType       String?  // "apk" | "pdf" | "zip" | "prompt"
+  promptText     String?  @db.Text // For AI prompt products
+  version        String   @default("1.0.0")
+  downloadLimit  Int?     // null = unlimited
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model PhysicalProduct {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  sku           String   @unique
+  stock         Int      @default(0)
+  weight        Float?   // grams
+  dimensions    Json?    // { l, w, h } in cm
+  shippingClass String?
+  warehouseNote String?
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductCategory {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  description String?
+  parentId    String?
+  parent      ProductCategory?  @relation("SubCategories", fields: [parentId], references: [id])
+  children    ProductCategory[] @relation("SubCategories")
+  products    Product[]
+}
+
+/// Blog posts — coexists with existing MDX-file-based blog.
+/// Both sources are merged on the frontend /blog route when ready.
+model BlogPost {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  excerpt     String
+  body        String        @db.Text // HTML from Tiptap
+  coverImage  String?
+  status      ContentStatus @default(DRAFT)
+  publishedAt DateTime?
+  authorId    String        // AdminUser.id
+  readingTime Int?          // minutes
+  tags        String[]
+  seoTitle    String?
+  seoDesc     String?
+  seoKeywords String[]
+  ogImage     String?
+  viewCount   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([slug])
+}
+
+/// Media files tracked after upload to Vercel Blob.
+model MediaFile {
+  id           String   @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int      // bytes
+  url          String   // Public CDN URL
+  blurHash     String?
+  width        Int?
+  height       Int?
+  altText      String?
+  folder       String   @default("/")
+  uploadedBy   String   // AdminUser.id
+  createdAt    DateTime @default(now())
+
+  @@index([mimeType])
+  @@index([folder])
+}
+
+/// Dynamic CMS pages (structured JSON sections).
+model CmsPage {
+  id        String        @id @default(cuid())
+  slug      String        @unique // e.g. "home", "about"
+  title     String
+  sections  Json          // Array of { type, ...props }
+  status    ContentStatus @default(DRAFT)
+  seoTitle  String?
+  seoDesc   String?
+  updatedAt DateTime      @updatedAt
+  updatedBy String?       // AdminUser.id
+}
+
+/// Global site settings — key-value store managed via admin UI.
+model SiteSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. "hero_headline", "announcement_visible"
+  value     String   @db.Text
+  /// text | json | boolean | image | color
+  type      String   @default("text")
+  group     String   @default("general")
+  label     String?  // Human-readable label for UI
+  updatedAt DateTime @updatedAt
+  updatedBy String?  // AdminUser.id
+}
+
+// ─────────────────────────────────────────────────────────────
+// PHASE 2 — Commerce, Order & Subscription Operations Models
+// ─────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  FULFILLED
+  SHIPPED
+  DELIVERED
+  REFUNDED
+  CANCELLED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  UNPAID
+  CANCELLED
+  EXPIRED
+  TRIALING
+  PAUSED
+}
+
+/// Admin Order Tracking — links to existing Purchase / User records.
+model Order {
+  id              String             @id @default(cuid())
+  orderNumber     String             @unique // e.g. "ORD-2026-1004"
+  userId          String
+  purchaseId      String?            @unique
+  status          OrderStatus        @default(PENDING)
+  totalAmount     Int                // in paise
+  currency        String             @default("INR")
+  shippingAddress Json?              // { name, line1, line2, city, state, postalCode, country, phone }
+  trackingNumber  String?
+  carrier         String?
+  notes           String?            @db.Text
+  refundReason    String?
+  refundedAmount  Int?               // in paise
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  fulfillments    OrderFulfillment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderFulfillment {
+  id             String   @id @default(cuid())
+  orderId        String
+  carrier        String
+  trackingNumber String
+  shippedAt      DateTime @default(now())
+  deliveredAt    DateTime?
+  notes          String?
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+/// Razorpay & Stripe Subscription tracking.
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String
+  planId               String             // e.g. "plan_pro_monthly"
+  planName             String
+  status               SubscriptionStatus @default(ACTIVE)
+  provider             String             // "razorpay" | "stripe"
+  providerSubId        String             @unique // Razorpay sub_id or Stripe sub_id
+  amount               Int                // in paise
+  interval             String             // "monthly" | "yearly"
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  endedAt              DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PHASE 3 — Analytics, SEO & Security Models
+// ─────────────────────────────────────────────────────────────
+
+/// Route-level SEO override metadata for any path (e.g. "/", "/pricing", "/courses").
+model SeoMetadata {
+  id          String   @id @default(cuid())
+  path        String   @unique // e.g. "/", "/pricing"
+  title       String
+  description String   @db.Text
+  keywords    String[]
+  ogImage     String?
+  canonical   String?
+  noIndex     Boolean  @default(false)
+  structured  Json?    // JSON-LD schema
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?  // AdminUser.id
+}
+
+// ─────────────────────────────────────────────────────────────
+// GIS & SMART CITY DIGITAL TWIN MODELS
+// ─────────────────────────────────────────────────────────────
+
+enum GisLayerType {
+  VECTOR
+  RASTER
+  WMS
+  WMTS
+  TILE_3D
+}
+
+/// GIS Layer definitions for DP, Zoning, Utilities, and Spatial Maps
+model GisLayer {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique
+  category    String       // "Zoning" | "Utilities" | "DP_Reservations" | "Environment"
+  type        GisLayerType @default(VECTOR)
+  url         String?      // WMS/WMTS or GeoJSON URL
+  geoJsonData Json?        // Stored GeoJSON feature collection
+  opacity     Float        @default(1.0)
+  isVisible   Boolean      @default(true)
+  isPublic    Boolean      @default(true)
+  metadata    Json?        // Legends, attributes, style config
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([category, isPublic])
+}
+
+/// Land Records, 7/12 Extracts & Parcel Geometry
+model LandRecord {
+  id              String   @id @default(cuid())
+  surveyNo        String
+  gatNo           String?
+  ctsNo           String?
+  plotNo          String?
+  village         String
+  taluka          String   @default("Haveli")
+  district        String   @default("Pune")
+  ownerName       String
+  areaSqM         Float
+  zone            String   @default("R1")
+  boundaryGeoJson Json?    // Polygon coordinates
+  propertyCardRef String?
+  mutationHistory Json?    // Historical 7/12 mutations log
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([surveyNo, village])
+  @@index([gatNo])
+  @@index([ctsNo])
+}
+
+/// Mobile GIS Field Survey Logs
+model GisSurvey {
+  id           String   @id @default(cuid())
+  title        String
+  inspector    String
+  locationName String
+  lat          Float
+  lng          Float
+  photos       String[] // Vercel Blob image URLs
+  notes        String   @db.Text
+  signatureUrl String?
+  status       String   @default("VERIFIED")
+  createdAt    DateTime @default(now())
+
+  @@index([inspector, status])
+}
+
+/// Citizen & AI Encroachment Detection Logs
+model GisEncroachment {
+  id          String   @id @default(cuid())
+  title       String
+  location    String
+  severity    String   @default("HIGH") // "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  reportedBy  String   @default("AI_SATELLITE_DETECTOR")
+  geometry    Json?    // GeoJSON point or polygon
+  imageUrl    String?
+  status      String   @default("PENDING_REVIEW") // "PENDING_REVIEW" | "INVESTIGATING" | "RESOLVED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([severity, status])
+}
+
+
+
